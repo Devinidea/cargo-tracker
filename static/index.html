@@ -310,6 +310,8 @@
       margin-top: 12px;
       max-height: 300px;
       overflow-y: auto;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .ocr-item {
       display: flex;
@@ -317,9 +319,11 @@
       gap: 8px;
       padding: 8px 0;
       border-bottom: 1px solid var(--gray-200);
+      min-width: max-content;
     }
     .ocr-item:last-child { border-bottom: none; }
-    .ocr-item input { flex: 1; }
+    .ocr-item input[type="text"] { min-width: 0; flex: 1; }
+    .ocr-item input[type="number"] { min-width: 50px; width: 50px; }
 
     /* Empty */
     .empty {
