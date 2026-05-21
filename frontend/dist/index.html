@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>海运清单 - Cargo Tracker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #f59e0b;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+      --bg: #f9fafb;
+      --card: #ffffff;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.15);
+      --radius: 8px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--gray-900);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+    /* Header */
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--shadow);
+    }
+    header h1 { font-size: 20px; font-weight: 600; }
+    header .subtitle { font-size: 12px; opacity: 0.8; }
+
+    /* Navigation */
+    nav {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--gray-200);
+      overflow-x: auto;
+    }
+    nav button {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--gray-500);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: var(--radius);
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    nav button:hover { background: var(--gray-100); color: var(--gray-700); }
+    nav button.active { background: var(--primary); color: white; }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    /* Button */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-secondary { background: var(--gray-200); color: var(--gray-700); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Input */
+    input[type="text"], input[type="number"], input[type="url"], textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--gray-300);
+      border-radius: var(--radius);
+      font-size: 14px;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* Form Group */
+    .form-group { margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 4px;
+    }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      text-align: center;
+      padding: 12px 8px;
+      background: var(--gray-100);
+      border-radius: var(--radius);
+    }
+    .stat-value { font-size: 20px; font-weight: 700; color: var(--primary); }
+    .stat-label { font-size: 11px; color: var(--gray-500); }
+
+    /* Shipment List */
+    .shipment-card {
+      border-left: 4px solid var(--primary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .shipment-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    .shipment-card.arrived { border-left-color: var(--success); }
+    .shipment-card.cancelled { border-left-color: var(--gray-500); opacity: 0.6; }
+    .shipment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .shipment-name { font-size: 16px; font-weight: 600; }
+    .shipment-date { font-size: 12px; color: var(--gray-500); }
+    .shipment-status {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .status-shipping { background: #dbeafe; color: var(--primary); }
+    .status-arrived { background: #dcfce7; color: var(--success); }
+    .status-cancelled { background: var(--gray-200); color: var(--gray-500); }
+    .shipment-meta { font-size: 13px; color: var(--gray-500); }
+
+    /* Box */
+    .box-card {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .box-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--gray-100);
+      cursor: pointer;
+    }
+    .box-header:hover { background: var(--gray-200); }
+    .box-name { font-weight: 600; font-size: 15px; }
+    .box-count { font-size: 12px; color: var(--gray-500); }
+    .box-content { padding: 12px; }
+    .box-empty { text-align: center; color: var(--gray-500); font-size: 13px; padding: 20px; }
+
+    /* Item */
+    .item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .item:last-child { border-bottom: none; }
+    .item-check {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--gray-300);
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      margin-top: 2px;
+    }
+    .item-check.checked {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+    }
+    .item-check.checked::after {
+      content: '✓';
+      font-size: 12px;
+    }
+    .item-info { flex: 1; min-width: 0; }
+    .item-name { font-size: 14px; font-weight: 500; }
+    .item-name.checked { text-decoration: line-through; color: var(--gray-500); }
+    .item-meta { font-size: 12px; color: var(--gray-500); display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+    .item-actions { display: flex; gap: 4px; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s;
+    }
+    .modal-overlay.show { opacity: 1; visibility: visible; }
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.95);
+      transition: transform 0.2s;
+    }
+    .modal-overlay.show .modal { transform: scale(1); }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .modal-title { font-size: 16px; font-weight: 600; }
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      font-size: 20px;
+      cursor: pointer;
+      border-radius: var(--radius);
+      color: var(--gray-500);
+    }
+    .modal-close:hover { background: var(--gray-100); }
+    .modal-body { padding: 16px; }
+    .modal-footer {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      padding: 16px;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    /* Upload Area */
+    .upload-area {
+      border: 2px dashed var(--gray-300);
+      border-radius: var(--radius);
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: var(--primary);
+      background: rgba(37, 99, 235, 0.05);
+    }
+    .upload-area input { display: none; }
+    .upload-icon { font-size: 40px; margin-bottom: 8px; }
+    .upload-text { font-size: 14px; color: var(--gray-500); }
+    .upload-preview { max-width: 100%; max-height: 200px; margin-top: 12px; border-radius: var(--radius); }
+
+    /* OCR Result */
+    .ocr-result {
+      background: var(--gray-100);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-top: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .ocr-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .ocr-item:last-child { border-bottom: none; }
+    .ocr-item input { flex: 1; }
+
+    /* Empty */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--gray-500);
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* Utility */
+    .mt-2 { margin-top: 8px; }
+    .mt-4 { margin-top: 16px; }
+    .mb-2 { margin-bottom: 8px; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .flex { display: flex; }
+    .gap-2 { gap: 8px; }
+    .flex-1 { flex: 1; }
+    .hidden { display: none; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--gray-900);
+      color: white;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      z-index: 2000;
+      opacity: 0;
+      transition: all 0.3s;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
+
+    /* Loading */
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--gray-300);
+      border-radius: 50%;
+      border-top-color: var(--primary);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Check All */
+    .check-all {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--gray-100);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .check-all input[type="checkbox"] { width: 18px; height: 18px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📦 海运清单</h1>
+    <div class="subtitle">Cargo Tracker - 再也不忘记箱子里有什么</div>
+  </header>
+
+  <nav id="nav">
+    <button class="active" data-view="list">海运记录</button>
+    <button data-view="add">+ 新建海运</button>
+  </nav>
+
+  <div class="container">
+    <!-- 海运列表视图 -->
+    <div id="view-list">
+      <div class="flex gap-2 mb-2">
+        <select id="filter-status" style="max-width: 120px;">
+          <option value="">全部状态</option>
+          <option value="shipping">运输中</option>
+          <option value="arrived">已到达</option>
+          <option value="cancelled">已取消</option>
+        </select>
+      </div>
+      <div id="shipment-list"></div>
+    </div>
+
+    <!-- 新建海运视图 -->
+    <div id="view-add" class="hidden">
+      <div class="card">
+        <h3 class="mb-2">新建海运</h3>
+        <div class="form-group">
+          <label>海运名称 *</label>
+          <input type="text" id="new-shipment-name" placeholder="例如：2025年5月家具海运">
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <textarea id="new-shipment-notes" placeholder="可选备注"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="createShipment()">创建</button>
+        <button class="btn btn-secondary" onclick="showView('list')">取消</button>
+      </div>
+    </div>
+
+    <!-- 海运详情视图 -->
+    <div id="view-detail" class="hidden">
+      <div class="card">
+        <div class="shipment-header">
+          <div>
+            <div class="shipment-name" id="detail-name"></div>
+            <div class="shipment-date" id="detail-date"></div>
+          </div>
+          <span class="shipment-status" id="detail-status"></span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-value" id="stat-boxes">0</div><div class="stat-label">箱子</div></div>
+          <div class="stat"><div class="stat-value" id="stat-items">0</div><div class="stat-label">商品</div></div>
+          <div class="stat"><div class="stat-value" id="stat-value">¥0</div><div class="stat-label">预估价值</div></div>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-sm btn-secondary" onclick="showAddBoxModal()">+ 添加箱子</button>
+          <button class="btn btn-sm btn-secondary" onclick="showOcrModal()">📷 扫描订单</button>
+          <select id="detail-status" onchange="updateShipmentStatus(this.value)" style="max-width: 120px;">
+            <option value="shipping">运输中</option>
+            <option value="arrived">已到达</option>
+            <option value="cancelled">已取消</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="boxes-container"></div>
+
+      <div class="mt-4">
+        <button class="btn btn-secondary" onclick="showView('list')">← 返回列表</button>
+        <button class="btn btn-danger" onclick="deleteCurrentShipment()">删除此海运</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用 Modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title"></div>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ============ 全局状态 ============
+    const API_BASE = '/api';
+    let currentShipmentId = null;
+    let currentBoxes = [];
+
+    // ============ 工具函数 ============
+    function $(id) { return document.getElementById(id); }
+    function show(id) { $(id).classList.remove('hidden'); }
+    function hide(id) { $(id).classList.add('hidden'); }
+
+    function toast(msg, type = '') {
+      const t = $('toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (type ? ' ' + type : '');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    function api(method, path, data) {
+      return fetch(API_BASE + path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: data ? JSON.stringify(data) : undefined
+      }).then(r => r.json());
+    }
+
+    function formatDate(d) {
+      const date = new Date(d + '+08:00');
+      return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    }
+
+    function formatCurrency(v) {
+      if (!v) return '¥-';
+      return '¥' + Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 0});
+    }
+
+    // ============ 视图控制 ============
+    function showView(view) {
+      ['list', 'add', 'detail'].forEach(v => hide('view-' + v));
+      show('view-' + view);
+      if (view === 'list') loadShipments();
+    }
+
+    $('nav').addEventListener('click', e => {
+      if (e.target.tagName === 'BUTTON') {
+        $('nav').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        showView(e.target.dataset.view);
+      }
+    });
+
+    // ============ 海运列表 ============
+    async function loadShipments() {
+      const status = $('filter-status').value;
+      const res = await api('GET', '/shipments' + (status ? '?status=' + status : ''));
+      if (!res.success) return toast('加载失败', 'error');
+      
+      const list = $('shipment-list');
+      if (!res.data.length) {
+        list.innerHTML = `<div class="empty"><div class="empty-icon">📦</div>暂无海运记录<br><small>点击上方"+ 新建海运"开始</small></div>`;
+        return;
+      }
+      
+      list.innerHTML = res.data.map(s => `
+        <div class="card shipment-card ${s.status}" onclick="openShipment(${s.id})">
+          <div class="shipment-header">
+            <div>
+              <div class="shipment-name">${s.name}</div>
+              <div class="shipment-date">${formatDate(s.created_at)}</div>
+            </div>
+            <span class="shipment-status status-${s.status}">
+              ${s.status === 'shipping' ? '运输中' : s.status === 'arrived' ? '已到达' : '已取消'}
+            </span>
+          </div>
+          <div class="shipment-meta">
+            ${s.stats.box_count || 0} 箱 · ${s.stats.item_count || 0} 件商品 · ${formatCurrency(s.stats.total_value)}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    $('filter-status').addEventListener('change', loadShipments);
+
+    // ============ 海运操作 ============
+    async function createShipment() {
+      const name = $('new-shipment-name').value.trim();
+      const notes = $('new-shipment-notes').value.trim();
+      if (!name) return toast('请输入名称', 'error');
+      
+      const res = await api('POST', '/shipments', { name, notes });
+      if (!res.success) return toast('创建失败', 'error');
+      
+      toast('创建成功', 'success');
+      $('new-shipment-name').value = '';
+      $('new-shipment-notes').value = '';
+      openShipment(res.data.id);
+    }
+
+    async function openShipment(id) {
+      currentShipmentId = id;
+      const res = await api('GET', `/shipments/${id}`);
+      if (!res.success) return toast('加载失败', 'error');
+      
+      const s = res.data;
+      $('detail-name').textContent = s.name;
+      $('detail-date').textContent = formatDate(s.created_at);
+      $('detail-status').className = `shipment-status status-${s.status}`;
+      $('detail-status').textContent = s.status === 'shipping' ? '运输中' : s.status === 'arrived' ? '已到达' : '已取消';
+      $('detail-status').value = s.status;
+      $('filter-status').value = s.status;
+      
+      $('stat-boxes').textContent = s.stats.box_count || 0;
+      $('stat-items').textContent = s.stats.item_count || 0;
+      $('stat-value').textContent = formatCurrency(s.stats.total_value);
+      
+      currentBoxes = s.boxes || [];
+      renderBoxes();
+      showView('detail');
+    }
+
+    async function updateShipmentStatus(status) {
+      await api('PUT', `/shipments/${currentShipmentId}/status`, { status });
+      toast('状态已更新');
+    }
+
+    async function deleteCurrentShipment() {
+      if (!confirm('确定删除此海运记录？所有箱子商品都会删除！')) return;
+      const res = await api('DELETE', `/shipments/${currentShipmentId}`);
+      if (!res.success) return toast('删除失败', 'error');
+      toast('已删除', 'success');
+      showView('list');
+    }
+
+    // ============ 箱子渲染 ============
+    function renderBoxes() {
+      const container = $('boxes-container');
+      if (!currentBoxes.length) {
+        container.innerHTML = '<div class="card"><div class="box-empty">还没有箱子，添加一个吧～</div></div>';
+        return;
+      }
+      container.innerHTML = currentBoxes.map(box => `
+        <div class="box-card">
+          <div class="box-header">
+            <div style="display:flex;align-items:center;gap:8px;flex:1" onclick="toggleBox(${box.id})">
+              <span class="box-toggle">${box._open ? '▼' : '▶'}</span>
+              <div>
+                <div class="box-name">${box.name}</div>
+                <div class="box-count">${box.items?.length || 0} 件商品</div>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="showEditBoxModal(${box.id})">✏️</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteBox(${box.id})">🗑️</button>
+          </div>
+          <div class="box-content" style="${box._open ? '' : 'display:none'}">
+            ${renderItems(box)}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderItems(box) {
+      if (!box.items?.length) return '<div class="box-empty">此箱暂无商品</div>';
+      const allChecked = box.items.every(i => i.checked);
+      return `
+        <div class="check-all">
+          <input type="checkbox" ${allChecked ? 'checked' : ''} onchange="toggleAllItems(${box.id}, this.checked)">
+          <span>全选验收</span>
+        </div>
+        ${box.items.map(item => `
+          <div class="item">
+            <div class="item-check ${item.checked ? 'checked' : ''}" onclick="toggleItem(${item.id}, ${box.id})"></div>
+            <div class="item-info">
+              <div class="item-name ${item.checked ? 'checked' : ''}">${item.name}</div>
+              <div class="item-meta">
+                ${item.quantity > 1 ? '×' + item.quantity : ''}
+                ${item.price ? formatCurrency(item.price) : ''}
+                ${item.source ? item.source : ''}
+                ${item.notes ? '· ' + item.notes : ''}
+              </div>
+            </div>
+            <div class="item-actions">
+              <button class="btn btn-sm btn-secondary" onclick="showEditItemModal(${item.id}, ${box.id})">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteItem(${item.id}, ${box.id})">🗑️</button>
+            </div>
+          </div>
+        `).join('')}
+        <button class="btn btn-sm btn-secondary mt-2" onclick="showAddItemModal(${box.id})">+ 添加商品</button>
+      `;
+    }
+
+    function toggleBox(boxId) {
+      const box = currentBoxes.find(b => b.id === boxId);
+      if (box) {
+        box._open = !box._open;
+        renderBoxes();
+      }
+    }
+
+    async function toggleItem(itemId, boxId) {
+      await api('POST', `/items/${itemId}/toggle`);
+      await refreshBox(boxId);
+    }
+
+    async function toggleAllItems(boxId, checked) {
+      const box = currentBoxes.find(b => b.id === boxId);
+      if (!box) return;
+      for (const item of box.items) {
+        if (item.checked !== checked) {
+          await api('POST', `/items/${item.id}/toggle`);
+        }
+      }
+      await refreshBox(boxId);
+    }
+
+    async function refreshBox(boxId) {
+      const res = await api('GET', `/shipments/${currentShipmentId}`);
+      if (res.success) {
+        const updatedBox = res.data.boxes.find(b => b.id === boxId);
+        if (updatedBox) {
+          const idx = currentBoxes.findIndex(b => b.id === boxId);
+          updatedBox._open = currentBoxes[idx]?._open ?? true;
+          currentBoxes[idx] = updatedBox;
+          renderBoxes();
+        }
+      }
+    }
+
+    // ============ Modal 通用 ============
+    function openModal(title, body, footer) {
+      $('modal-title').textContent = title;
+      $('modal-body').innerHTML = body;
+      $('modal-footer').innerHTML = footer;
+      $('modal-overlay').classList.add('show');
+    }
+
+    function closeModal() {
+      $('modal-overlay').classList.remove('show');
+    }
+
+    // ============ 箱子 Modal ============
+    function showAddBoxModal() {
+      openModal('添加箱子',
+        `<div class="form-group"><label>箱子名称 *</label><input type="text" id="box-name" placeholder="例如：箱1-厨房"></div>
+         <div class="form-group"><label>备注</label><textarea id="box-notes" placeholder="可选备注，如"易碎品""></textarea></div>`,
+        `<button class="btn btn-secondary" onclick="closeModal()">取消</button>
+         <button class="btn btn-primary" onclick="addBox()">添加</button>`
+      );
+      setTimeout(() => $('box-name').focus(), 100);
+    }
+
+    async function addBox() {
+      const name = $('box-name').value.trim();
+      const notes = $('box-notes').value.trim();
+      if (!name) return toast('请输入名称', 'error');
+      
+      const res = await api('POST', `/shipments/${currentShipmentId}/boxes`, { name, notes });
+      if (!res.success) return toast('添加失败', 'error');
+      
+      closeModal();
+      toast('箱子已添加', 'success');
+      await openShipment(currentShipmentId);
+    }
+
+    let editBoxId = null;
+    function showEditBoxModal(boxId) {
+      editBoxId = boxId;
+      const box = currentBoxes.find(b => b.id === boxId);
+      if (!box) return;
+      openModal('编辑箱子',
+        `<div class="form-group"><label>箱子名称 *</label><input type="text" id="edit-box-name" value="${box.name}"></div>
+         <div class="form-group"><label>备注</label><textarea id="edit-box-notes">${box.notes || ''}</textarea></div>`,
+        `<button class="btn btn-secondary" onclick="closeModal()">取消</button>
+         <button class="btn btn-primary" onclick="editBox()">保存</button>`
+      );
+    }
+
+    async function editBox() {
+      const name = $('edit-box-name').value.trim();
+      if (!name) return toast('请输入名称', 'error');
+      const notes = $('edit-box-notes').value.trim();
+      const res = await api('PUT', `/boxes/${editBoxId}`, { name, notes });
+      if (!res.success) return toast('保存失败', 'error');
+      closeModal();
+      toast('已保存', 'success');
+      await openShipment(currentShipmentId);
+    }
+
+    async function deleteBox(boxId) {
+      if (!confirm('确定删除此箱子？箱子内的所有商品也会删除！')) return;
+      const res = await api('DELETE', `/boxes/${boxId}`);
+      if (!res.success) return toast('删除失败', 'error');
+      toast('已删除', 'success');
+      await openShipment(currentShipmentId);
+    }
+
+    // ============ 商品 Modal ============
+    function showAddItemModal(boxId) {
+      openModal('添加商品',
+        `<div class="form-group"><label>商品名称 *</label><input type="text" id="item-name" placeholder="商品名称"></div>
+         <div class="form-group"><label>数量</label><input type="number" id="item-quantity" value="1" min="1"></div>
+         <div class="form-group"><label>价值 (RMB)</label><input type="number" id="item-price" placeholder="预估价值"></div>
+         <div class="form-group"><label>来源</label><input type="text" id="item-source" placeholder="淘宝/拼多多/其他"></div>
+         <div class="form-group"><label>订单号</label><input type="text" id="item-order-no" placeholder="可选"></div>
+         <div class="form-group"><label>备注</label><textarea id="item-notes" placeholder="放哪里、注意事项等"></textarea></div>`,
+        `<button class="btn btn-secondary" onclick="closeModal()">取消</button>
+         <button class="btn btn-primary" onclick="addItem(${boxId})">添加</button>`
+      );
+      setTimeout(() => $('item-name').focus(), 100);
+    }
+
+    async function addItem(boxId) {
+      const name = $('item-name').value.trim();
+      if (!name) return toast('请输入名称', 'error');
+      
+      const data = {
+        name,
+        quantity: parseInt($('item-quantity').value) || 1,
+        price: parseFloat($('item-price').value) || null,
+        source: $('item-source').value.trim(),
+        order_no: $('item-order-no').value.trim(),
+        notes: $('item-notes').value.trim()
+      };
+      
+      const res = await api('POST', `/boxes/${boxId}/items`, data);
+      if (!res.success) return toast('添加失败', 'error');
+      
+      closeModal();
+      toast('商品已添加', 'success');
+      await refreshBox(boxId);
+      await openShipment(currentShipmentId);
+    }
+
+    let editItemId = null;
+    function showEditItemModal(itemId, boxId) {
+      editItemId = itemId;
+      const box = currentBoxes.find(b => b.id === boxId);
+      const item = box?.items?.find(i => i.id === itemId);
+      if (!item) return;
+      
+      openModal('编辑商品',
+        `<div class="form-group"><label>商品名称 *</label><input type="text" id="edit-item-name" value="${item.name}"></div>
+         <div class="form-group"><label>数量</label><input type="number" id="edit-item-quantity" value="${item.quantity}" min="1"></div>
+         <div class="form-group"><label>价值 (RMB)</label><input type="number" id="edit-item-price" value="${item.price || ''}"></div>
+         <div class="form-group"><label>备注</label><textarea id="edit-item-notes">${item.notes || ''}</textarea></div>`,
+        `<button class="btn btn-secondary" onclick="closeModal()">取消</button>
+         <button class="btn btn-primary" onclick="editItem(${boxId})">保存</button>`
+      );
+    }
+
+    async function editItem(boxId) {
+      const name = $('edit-item-name').value.trim();
+      if (!name) return toast('请输入名称', 'error');
+      
+      const data = {
+        name,
+        quantity: parseInt($('edit-item-quantity').value) || 1,
+        price: parseFloat($('edit-item-price').value) || null,
+        notes: $('edit-item-notes').value.trim()
+      };
+      
+      const res = await api('PUT', `/items/${editItemId}`, data);
+      if (!res.success) return toast('保存失败', 'error');
+      
+      closeModal();
+      toast('已保存', 'success');
+      await refreshBox(boxId);
+    }
+
+    async function deleteItem(itemId, boxId) {
+      if (!confirm('确定删除此商品？')) return;
+      const res = await api('DELETE', `/items/${itemId}`);
+      if (!res.success) return toast('删除失败', 'error');
+      toast('已删除', 'success');
+      await refreshBox(boxId);
+      await openShipment(currentShipmentId);
+    }
+
+    // ============ OCR 扫描 ============
+    let ocrBoxId = null;
+    let ocrImageBase64 = null;
+
+    function showOcrModal() {
+      if (!currentBoxes.length) {
+        toast('请先添加箱子', 'error');
+        return;
+      }
+      
+      ocrBoxId = currentBoxes[0].id;
+      ocrImageBase64 = null;
+      
+      const boxOptions = currentBoxes.map(b => 
+        `<option value="${b.id}" ${b.id === ocrBoxId ? 'selected' : ''}>${b.name}</option>`
+      ).join('');
+      
+      openModal('扫描订单',
+        `<p style="font-size:13px;color:var(--gray-500);margin-bottom:12px">上传淘宝/拼多多订单截图，AI自动识别商品</p>
+         <div class="upload-area" id="upload-area" onclick="$('ocr-file').click()">
+           <input type="file" id="ocr-file" accept="image/*" onchange="handleOcrFile(this)">
+           <div class="upload-icon">📷</div>
+           <div class="upload-text">点击或拖拽上传订单截图</div>
+           <img id="ocr-preview" class="upload-preview hidden">
+         </div>
+         <div class="form-group mt-2">
+           <label>添加到箱子</label>
+           <select id="ocr-box-select">${boxOptions}</select>
+         </div>
+         <div id="ocr-result"></div>`,
+        `<button class="btn btn-secondary" onclick="closeModal()">取消</button>
+         <button class="btn btn-primary" id="ocr-submit" onclick="submitOcr()" disabled>识别并添加</button>`
+      );
+    }
+
+    function handleOcrFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = e => {
+        ocrImageBase64 = e.target.result;
+        $('ocr-preview').src = ocrImageBase64;
+        $('ocr-preview').classList.remove('hidden');
+        $('ocr-submit').disabled = false;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function submitOcr() {
+      if (!ocrImageBase64) return toast('请先上传截图', 'error');
+      
+      ocrBoxId = parseInt($('ocr-box-select').value);
+      $('ocr-result').innerHTML = '<div class="flex gap-2" style="align-items:center"><div class="loading"></div><span>AI 识别中，请稍候...</span></div>';
+      $('ocr-submit').disabled = true;
+      
+      try {
+        const res = await api('POST', '/ocr', { image: ocrImageBase64 });
+        
+        if (!res.success) {
+          $('ocr-result').innerHTML = `<div style="color:var(--danger);padding:12px">识别失败: ${res.error}</div>`;
+          $('ocr-submit').disabled = false;
+          return;
+        }
+        
+        const items = res.data;
+        if (!items?.length) {
+          $('ocr-result').innerHTML = `<div style="color:var(--warning);padding:12px">未能识别出商品，请手动添加</div>`;
+          $('ocr-submit').disabled = false;
+          return;
+        }
+        
+        $('ocr-result').innerHTML = `
+          <div style="font-size:13px;color:var(--success);margin-bottom:8px">✓ 识别到 ${items.length} 件商品：</div>
+          <div class="ocr-result">
+            ${items.map((item, i) => `
+              <div class="ocr-item">
+                <input type="checkbox" checked data-index="${i}">
+                <input type="text" value="${item.name}" id="ocr-name-${i}" style="flex:1">
+                <input type="number" value="${item.quantity || 1}" id="ocr-qty-${i}" style="width:60px" min="1">
+              </div>
+            `).join('')}
+          </div>
+          <button class="btn btn-success mt-2" onclick="confirmOcrItems(${JSON.stringify(items).replace(/"/g, '&quot;')})">确认添加全部</button>
+        `;
+      } catch (e) {
+        $('ocr-result').innerHTML = `<div style="color:var(--danger);padding:12px">识别失败: ${e.message}</div>`;
+        $('ocr-submit').disabled = false;
+      }
+    }
+
+    async function confirmOcrItems(items) {
+      const checkedBoxes = document.querySelectorAll('.ocr-item input[type="checkbox"]:checked');
+      let added = 0;
+      
+      for (const cb of checkedBoxes) {
+        const i = parseInt(cb.dataset.index);
+        const name = $(`ocr-name-${i}`).value.trim();
+        const quantity = parseInt($(`ocr-qty-${i}`).value) || 1;
+        if (!name) continue;
+        
+        const item = items[i];
+        await api('POST', `/boxes/${ocrBoxId}/items`, {
+          name,
+          quantity,
+          price: item.price || null,
+          source: item.source || '',
+          order_no: item.order_no || ''
+        });
+        added++;
+      }
+      
+      closeModal();
+      toast(`已添加 ${added} 件商品`, 'success');
+      await openShipment(currentShipmentId);
+    }
+
+    // ============ 初始化 ============
+    loadShipments();
+  </script>
+</body>
+</html>

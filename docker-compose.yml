@@ -1,0 +1,16 @@
+services:
+  cargo-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cargo-tracker
+    restart: unless-stopped
+    ports:
+      - "5180:5180"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
