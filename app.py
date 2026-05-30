@@ -6,7 +6,6 @@ Cargo Tracker - Flask 后端 API
 import os
 import re
 import base64
-import uuid
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
@@ -14,6 +13,7 @@ from flask_cors import CORS
 
 from db_schema import (
     init_db,
+    cleanup_orphans,
     # 海运
     create_shipment, get_shipments, get_shipment, update_shipment_status, delete_shipment,
     # 箱子
@@ -29,7 +29,6 @@ CORS(app)
 
 # MiniMax API 配置
 MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
-MINIMAX_API_URL = "https://api.minimax.chat/v1/text/chatcompletion_v2"
 
 # 确保数据库目录存在
 DATA_DIR = "/data"
@@ -37,6 +36,15 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # 初始化数据库
 init_db()
+
+# 启动时清理孤儿数据（B1 修复后的一次性兜底）
+_cleanup_result = cleanup_orphans()
+if _cleanup_result["boxes"] or _cleanup_result["items"]:
+    print(
+        f"启动清理：删除 {_cleanup_result['boxes']} 个孤儿 boxes、"
+        f"{_cleanup_result['items']} 个孤儿 items",
+        flush=True,
+    )
 
 
 # ============ 静态文件 ============
@@ -138,7 +146,7 @@ def api_update_box(box_id):
     name = data.get('name')
     notes = data.get('notes')
     
-    success = update_box(box_id, name, notes)
+    success = update_box(box_id, name=name, notes=notes)
     return jsonify({"success": success})
 
 
@@ -190,7 +198,14 @@ def api_update_item(item_id):
     if checked is not None:
         checked = 1 if checked else 0
     
-    success = update_item(item_id, name, quantity, price, notes, checked)
+    success = update_item(
+        item_id,
+        name=name,
+        quantity=quantity,
+        price=price,
+        notes=notes,
+        checked=checked,
+    )
     return jsonify({"success": success})
 
 
@@ -246,56 +261,29 @@ def api_ocr():
 4. 返回纯 JSON 数组，不要其他文字"""
 
     try:
-        # 如果是 base64，直接使用
+        # base64 模式：直接解码到内存
         if image_data:
             # 去除可能的 data:image/xxx;base64, 前缀
             if ',' in image_data:
                 image_data = image_data.split(',')[1]
-            
-            image_content = base64.b64decode(image_data)
-            ext = _detect_image_ext(image_content)
-            temp_path = f"/tmp/{uuid.uuid4().hex}.{ext}"
-            
-            with open(temp_path, 'wb') as f:
-                f.write(image_content)
-            
-            result = _call_minimax_vision(temp_path, prompt)
-            os.unlink(temp_path)
-            return result
-        
-        # 如果是 URL，下载后处理
+            image_bytes = base64.b64decode(image_data)
+            return _call_minimax_vision(image_bytes, prompt)
+
+        # URL 模式：下载到内存
         elif image_url:
-            temp_path = f"/tmp/{uuid.uuid4().hex}.jpg"
             resp = requests.get(image_url, timeout=30)
             resp.raise_for_status()
-            with open(temp_path, 'wb') as f:
-                f.write(resp.content)
-            
-            result = _call_minimax_vision(temp_path, prompt)
-            os.unlink(temp_path)
-            return result
-            
+            return _call_minimax_vision(resp.content, prompt)
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _detect_image_ext(data: bytes) -> str:
-    """根据文件头检测图片类型"""
-    if data[:8] == b'\x89PNG\r\n\x1a\n':
-        return 'png'
-    elif data[:2] == b'\xff\xd8':
-        return 'jpg'
-    elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
-        return 'webp'
-    return 'jpg'
-
-
-def _call_minimax_vision(image_path: str, prompt: str) -> tuple:
-    """调用 MiniMax 视觉模型进行 OCR"""
+def _call_minimax_vision(image_bytes: bytes, prompt: str):
+    """调用 MiniMax 视觉模型进行 OCR。image_bytes 直接 base64 编码后发送。"""
     import json
 
-    with open(image_path, 'rb') as f:
-        img_b64 = base64.b64encode(f.read()).decode()
+    img_b64 = base64.b64encode(image_bytes).decode()
 
     payload = {
         "prompt": prompt,

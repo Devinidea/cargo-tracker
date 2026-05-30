@@ -13,6 +13,7 @@ DB_PATH = "/data/cargo_tracker.db"
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -164,13 +165,17 @@ def get_box(box_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def update_box(box_id: int, name: str = None, notes: str = None) -> bool:
+def update_box(box_id: int, **fields) -> bool:
+    """更新 box 的指定字段。白名单过滤后单条 UPDATE，rowcount 准确。"""
+    ALLOWED = {"name", "notes"}
+    cols = {k: v for k, v in fields.items() if k in ALLOWED and v is not None}
+    if not cols:
+        return False
+    set_clause = ", ".join(f"{k} = ?" for k in cols)
+    sql = f"UPDATE boxes SET {set_clause} WHERE id = ?"
     conn = get_conn()
     cursor = conn.cursor()
-    if name is not None:
-        cursor.execute("UPDATE boxes SET name = ? WHERE id = ?", (name, box_id))
-    if notes is not None:
-        cursor.execute("UPDATE boxes SET notes = ? WHERE id = ?", (notes, box_id))
+    cursor.execute(sql, (*cols.values(), box_id))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -236,26 +241,17 @@ def get_items_by_shipment(shipment_id: int) -> list:
     return [dict(row) for row in rows]
 
 
-def update_item(
-    item_id: int,
-    name: str = None,
-    quantity: int = None,
-    price: float = None,
-    notes: str = None,
-    checked: int = None
-) -> bool:
+def update_item(item_id: int, **fields) -> bool:
+    """更新 item 的指定字段。白名单过滤后单条 UPDATE，rowcount 准确。"""
+    ALLOWED = {"name", "quantity", "price", "notes", "checked"}
+    cols = {k: v for k, v in fields.items() if k in ALLOWED and v is not None}
+    if not cols:
+        return False
+    set_clause = ", ".join(f"{k} = ?" for k in cols)
+    sql = f"UPDATE items SET {set_clause} WHERE id = ?"
     conn = get_conn()
     cursor = conn.cursor()
-    if name is not None:
-        cursor.execute("UPDATE items SET name = ? WHERE id = ?", (name, item_id))
-    if quantity is not None:
-        cursor.execute("UPDATE items SET quantity = ? WHERE id = ?", (quantity, item_id))
-    if price is not None:
-        cursor.execute("UPDATE items SET price = ? WHERE id = ?", (price, item_id))
-    if notes is not None:
-        cursor.execute("UPDATE items SET notes = ? WHERE id = ?", (notes, item_id))
-    if checked is not None:
-        cursor.execute("UPDATE items SET checked = ? WHERE id = ?", (checked, item_id))
+    cursor.execute(sql, (*cols.values(), item_id))
     conn.commit()
     affected = cursor.rowcount
     conn.close()
@@ -307,6 +303,28 @@ def get_shipment_stats(shipment_id: int) -> dict:
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else {}
+
+
+def cleanup_orphans() -> dict:
+    """删除指向已不存在主键的孤儿数据。
+
+    返回 {'boxes': N, 'items': M}，分别是被删的孤儿 boxes 和 items 数量。
+    顺序：先 boxes（其 items 会因 FK cascade 跟着删），再 items 兜底
+    （兜底捕获历史上 FK 关闭时期累积的、box 已经不存在的孤儿 items）。
+    """
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM boxes WHERE shipment_id NOT IN (SELECT id FROM shipments)"
+    )
+    boxes_deleted = cursor.rowcount
+    cursor.execute(
+        "DELETE FROM items WHERE box_id NOT IN (SELECT id FROM boxes)"
+    )
+    items_deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return {"boxes": boxes_deleted, "items": items_deleted}
 
 
 if __name__ == "__main__":
